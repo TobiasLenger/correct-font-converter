@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![App Screenshot](https://via.placeholder.com/800x400?text=Preview+of+Your+App+Here) 
+![App Screenshot](static/screenshot.png) 
 
 **"Can't install webfont that you just stole from website on your expensive-ass mac? Convert it here correctly"**
 
