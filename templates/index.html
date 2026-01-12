@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Font Converter</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+    <div class="container">
+        <div>
+            <h1>Correct Font Conversion Tool</h1>
+            <p class="subtitle">Can't install webfont that you just stole from website on your expensive-ass
+                mac?<br>Convert it here correctly</p>
+        </div>
+
+        <div class="main-grid">
+
+            <!-- TOP SECTION -->
+            <div class="top-row">
+
+                <!-- LEFT: INPUT -->
+                <div class="panel-left" id="dropArea">
+                    <input type="file" id="fileInput" accept=".woff2,.woff,.ttf,.otf" multiple style="display:none">
+
+                    <!-- Overlay for Empty or Single State -->
+                    <div class="dropzone-overlay" id="dropOverlay">
+                        <div id="dropIconArea">
+                            <svg class="drop-icon" fill="currentColor" viewBox="0 0 24 24">
+                                <path
+                                    d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z" />
+                            </svg>
+                        </div>
+                        <div class="drop-text" id="mainDropText">Drop Files Here</div>
+                        <div class="drop-sub" id="subDropText">WOFF2, WOFF, TTF, OTF</div>
+                    </div>
+
+                    <!-- List View (Multiple) -->
+                    <div class="file-list-view" id="fileListView">
+                        <!-- Items go here -->
+                    </div>
+                </div>
+
+                <!-- RIGHT: CONTROL & OUTPUT -->
+                <div class="panel-right">
+                    <div class="control-group">
+                        <label>Target Format</label>
+                        <select id="outputFormat">
+                            <option value="ttf">TTF</option>
+                            <option value="otf">OTF</option>
+                            <option value="woff">WOFF</option>
+                            <option value="woff2">WOFF2</option>
+                        </select>
+                    </div>
+
+                    <div class="output-area">
+                        <div id="outputPlaceholder" class="output-placeholder">
+                            Converted files will<br>appear here
+                        </div>
+
+                        <div class="spinner" id="spinner"></div>
+
+                        <div class="download-section" id="downloadSection">
+                            <svg class="success-check" viewBox="0 0 24 24">
+                                <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                            </svg>
+                            <div class="converted-name" id="convertedName">Font.ttf</div>
+                            <!-- Download Link -->
+                            <a href="#" class="download-btn" id="downloadBtn" download>
+                                Download
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- BOTTOM SECTION -->
+            <div class="bottom-row">
+                <div class="preview-box">
+                    <div class="preview-header">
+                        <select id="previewLang" class="lang-select">
+                            <option value="latin">Latin</option>
+                            <option value="cyrillic">Cyrillic</option>
+                            <option value="arabic">Arabic</option>
+                            <option value="chinese">Chinese</option>
+                            <option value="japanese">Japanese</option>
+                        </select>
+                    </div>
+                    <div class="preview-scroll">
+                        <div class="preview-text" id="previewText" style="font-family: sans-serif;">Abc 123</div>
+                    </div>
+                    <div class="preview-badge">Preview</div>
+                </div>
+
+                <button id="convertBtn" class="convert-btn">Convert</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- Elements ---
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const dropOverlay = document.getElementById('dropOverlay');
+        const mainDropText = document.getElementById('mainDropText');
+        const subDropText = document.getElementById('subDropText');
+        const fileListView = document.getElementById('fileListView');
+        const dropIconArea = document.getElementById('dropIconArea');
+
+        const outputFormat = document.getElementById('outputFormat');
+        const convertBtn = document.getElementById('convertBtn');
+
+        const outputPlaceholder = document.getElementById('outputPlaceholder');
+        const spinner = document.getElementById('spinner');
+        const downloadSection = document.getElementById('downloadSection');
+        const convertedName = document.getElementById('convertedName');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        const previewText = document.getElementById('previewText');
+        const previewLang = document.getElementById('previewLang');
+
+        // --- State ---
+        let currentFiles = [];
+        let selectedFileIndex = 0;
+
+        const ALPHABETS = {
+            latin: "Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz 0123456789",
+            cyrillic: "Аа Бб Вв Гг Дд Ее Ёё Жж Зз Ии Йй Кк Лл Мм Нн Оо Пп Рр Сс Тт Уу Фф Хх Цц Чч Шш Щщ Ъъ Ыы Ьь Ээ Юю Яя 0123456789",
+            arabic: "أ ب ت ث ج ح خ د ذ ر ز س ش ص ض ط ظ ع غ ف ق ك ل م ن هـ و ي 0123456789",
+            chinese: "天地玄黄 宇宙洪荒 日月盈昃 辰宿列张 0123456789",
+            japanese: "あいうえお かきくけこ さしすせそ たちつてと なにぬねの 0123456789"
+        };
+
+        // --- Init ---
+        previewLang.addEventListener('change', updatePreviewContent);
+        dropArea.addEventListener('click', (e) => {
+            // Only trigger if clicking empty space or overlay
+            if (e.target.closest('.file-item') || e.target.closest('.remove-x')) return;
+            fileInput.click();
+        });
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        // Drag & Drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+            dropArea.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); });
+        });
+        dropArea.addEventListener('dragover', () => dropArea.classList.add('dragover'));
+        dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+        dropArea.addEventListener('drop', (e) => {
+            dropArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function getExt(name) { return name.split('.').pop().toLowerCase(); }
+
+        function handleFiles(fileList) {
+            if (!fileList || !fileList.length) return;
+
+            const validExts = ['woff', 'woff2', 'ttf', 'otf'];
+            let added = 0;
+
+            Array.from(fileList).forEach(f => {
+                const ext = getExt(f.name);
+                if (validExts.includes(ext)) {
+                    // simple dupe check
+                    if (!currentFiles.some(cf => cf.name === f.name && cf.size === f.size)) {
+                        currentFiles.push(f);
+                        added++;
+                    }
+                }
+            });
+
+            if (added > 0) {
+                // Updated UI
+                selectedFileIndex = currentFiles.length - added; // Select first added
+                renderUI();
+                updatePreview(currentFiles[selectedFileIndex]);
+                resetOutput();
+            }
+
+            fileInput.value = '';
+        }
+
+        function removeFile(idx) {
+            currentFiles.splice(idx, 1);
+            if (currentFiles.length === 0) {
+                selectedFileIndex = -1;
+                resetOutput();
+                resetPreview();
+            } else {
+                if (selectedFileIndex === idx) selectedFileIndex = 0;
+                else if (selectedFileIndex > idx) selectedFileIndex--;
+                updatePreview(currentFiles[selectedFileIndex]);
+            }
+            renderUI();
+        }
+
+        function selectFile(idx) {
+            selectedFileIndex = idx;
+            renderUI();
+            updatePreview(currentFiles[idx]);
+        }
+
+        function renderUI() {
+            // Toggle input active state
+            const count = currentFiles.length;
+
+            if (count === 0) {
+                // EMPTY STATE
+                dropOverlay.style.display = 'flex';
+                fileListView.style.display = 'none';
+                mainDropText.textContent = "Drop Files Here";
+                subDropText.style.display = 'block';
+                dropIconArea.style.display = 'block';
+
+                convertBtn.classList.remove('active');
+                convertBtn.textContent = "Convert";
+                return;
+            }
+
+            convertBtn.classList.add('active');
+            convertBtn.textContent = count > 1 ? `Convert ${count} Files` : "Convert File";
+
+            if (count === 1) {
+                // SINGLE FILE STATE
+                dropOverlay.style.display = 'flex';
+                fileListView.style.display = 'none';
+                dropIconArea.style.display = 'none'; // hide icon to make room? or keep it?
+                // Let's hide icon, show huge text
+                mainDropText.innerHTML = `<span class="file-name-large">${currentFiles[0].name}</span>`;
+                subDropText.style.display = 'none';
+            } else {
+                // LIST STATE
+                dropOverlay.style.display = 'none';
+                fileListView.style.display = 'flex';
+
+                fileListView.innerHTML = '';
+                currentFiles.forEach((f, i) => {
+                    const el = document.createElement('div');
+                    el.className = `file-item ${i === selectedFileIndex ? 'selected' : ''}`;
+                    el.onclick = () => selectFile(i);
+                    el.innerHTML = `
+                    <span class="file-ext-tag">${getExt(f.name).toUpperCase()}</span>
+                    <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
+                    <div class="remove-x" onclick="event.stopPropagation(); removeFile(${i})">✕</div>
+                `;
+                    fileListView.appendChild(el);
+                });
+            }
+        }
+
+        // --- PREVIEW ---
+        let loadedFontFamily = null;
+
+        async function updatePreview(file) {
+            if (!file) return;
+
+            try {
+                previewText.style.opacity = '0.3';
+                const fontName = `preview-${Date.now()}`;
+                const buffer = await file.arrayBuffer();
+                const face = new FontFace(fontName, buffer);
+                await face.load();
+                document.fonts.add(face);
+
+                loadedFontFamily = fontName;
+                previewText.style.fontFamily = fontName;
+                updatePreviewContent();
+                previewText.style.opacity = '1';
+
+            } catch (e) {
+                console.error(e);
+                loadedFontFamily = null;
+                previewText.style.fontFamily = 'sans-serif';
+                previewText.textContent = "Preview Error";
+            }
+        }
+
+        function resetPreview() {
+            loadedFontFamily = null;
+            previewText.style.fontFamily = 'sans-serif';
+            previewText.textContent = "Abc 123";
+            previewText.style.opacity = '0.3';
+        }
+
+        function updatePreviewContent() {
+            if (!loadedFontFamily) {
+                previewText.textContent = "Abc 123";
+                return;
+            }
+            const lang = previewLang.value;
+            const text = ALPHABETS[lang];
+
+            // Simple support check
+            const sample = text.replace(/\s/g, '').substring(0, 6);
+            const supports = document.fonts.check(`12px "${loadedFontFamily}"`, sample);
+
+            if (supports) {
+                previewText.textContent = text;
+                previewText.style.color = "#000";
+            } else {
+                previewText.textContent = "Not Supported";
+                previewText.style.color = "#999";
+            }
+        }
+
+        // --- OUTPUT & CONVERT ---
+        function resetOutput() {
+            outputPlaceholder.style.display = 'block';
+            spinner.style.display = 'none';
+            downloadSection.style.display = 'none';
+        }
+
+        convertBtn.addEventListener('click', async () => {
+            if (!currentFiles.length) return;
+
+            convertBtn.classList.remove('active');
+            convertBtn.textContent = "Processing...";
+            outputPlaceholder.style.display = 'none';
+            spinner.style.display = 'block';
+            downloadSection.style.display = 'none';
+
+            const formData = new FormData();
+            currentFiles.forEach(f => formData.append('file', f));
+            formData.append('targetFormat', outputFormat.value);
+
+            try {
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                spinner.style.display = 'none';
+                if (data.success) {
+                    downloadSection.style.display = 'flex';
+                    // Show filename or Zip name
+                    const isZip = data.file.endsWith('.zip');
+                    const name = isZip ? "Converted Batch.zip" : data.file.split('/').pop();
+
+                    convertedName.textContent = name;
+
+                    // Set download link: logic relies on backend saving to Downloads mainly,
+                    // but for web context we can serve it back. 
+                    // Since user app opens file in Finder usually or saves to Downloads, 
+                    // we'll just open the file path if local, OR serve it.
+                    // Current backend returns local path. 
+                    // Browsers can't download local paths directly easily.
+                    // WE NEED A SERVE ROUTE OR just trigger 'open'.
+                    // For now, let's assume the backend saves it. The "Download" button 
+                    // effectively just points to the file if we had a serve route.
+                    // Hack: We'll create a serve route or just reveal it.
+                    // Re-reading user request: "Download button below".
+                    // We'll update backend to serve the file for real download if in browser mode.
+
+                    // Let's set href to a new route we'll make quickly? 
+                    // actually we can just use the path if we are in pywebview? 
+                    // Pywebview behaves like a browser.
+
+                    // Let's add a '/download' route logic to the href.
+                    // We'll pass the full path to a new download route.
+                    const encPath = encodeURIComponent(data.file);
+                    downloadBtn.href = `/download_file?path=${encPath}`;
+                    downloadBtn.textContent = isZip ? "Download ZIP" : "Download File";
+
+                } else {
+                    alert("Error: " + data.error);
+                    resetOutput();
+                }
+            } catch (e) {
+                alert("Error: " + e);
+                resetOutput();
+            }
+            renderUI();
+        });
+
+    </script>
+
+</body>
+
+</html>

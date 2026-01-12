@@ -1,0 +1,6 @@
+fonttools
+brotli
+zopfli
+flask
+pywebview
+pyinstaller
